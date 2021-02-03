@@ -1,0 +1,11 @@
+//
+//  Config.xcconfig
+//  SQLite
+//
+//  Created by Dennis Lindsey on 1/25/21.
+//
+
+// Configuration settings file format documentation can be found at:
+// https://help.apple.com/xcode/#/dev745c5c974
+
+OTHER_SWIFT_FLAGS = $(inherited) -D USE_UPPERCASE

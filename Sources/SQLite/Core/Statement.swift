@@ -37,7 +37,7 @@ public final class Statement {
 
     fileprivate var handle: OpaquePointer? = nil
 
-    fileprivate let connection: Connection
+    internal let connection: Connection
 
     init(_ connection: Connection, _ SQL: String) throws {
         self.connection = connection
@@ -208,7 +208,7 @@ public protocol FailableIterator : IteratorProtocol {
 
 extension FailableIterator {
     public func next() -> Element? {
-        return try! failableNext()
+        return try? failableNext()
     }
 }
 

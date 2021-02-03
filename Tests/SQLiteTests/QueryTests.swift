@@ -131,6 +131,10 @@ class QueryTests : XCTestCase {
             "SELECT * FROM \"users\" WHERE ((\"age\" >= 35) AND \"admin\")",
             users.filter(age >= 35).filter(admin)
         )
+        AssertSQL(
+            "SELECT * FROM \"users\" WHERE ((\"age\" >= 35) OR \"admin\")",
+            users.filter(age >= 35 || admin)
+        )
     }
 
     func test_group_withSingleExpressionName_compilesGroupClause() {
@@ -270,6 +274,80 @@ class QueryTests : XCTestCase {
         )
     }
 
+    func test_insert_encodable_date() throws {
+
+        let emails = Table("emails")
+
+        do {
+            let value = TestCodableDate(int: 1, intOptional: nil, string: "2", stringOptional: nil, bool: true, boolOptional: nil, float: 3, floatOptional: nil, double: 4, doubleOptional: nil, date: Date.init(timeIntervalSince1970: 3*60 + 1.234567), dateOptional: nil)
+            let insert = try emails.insert(value)
+            AssertSQL(
+                "INSERT INTO \"emails\" (\"int\", \"string\", \"bool\", \"float\", \"double\", \"date\") VALUES (1, '2', 1, 3.0, 4.0, '1970-01-01T00:03:01.235')",
+                insert
+            )
+        }
+
+
+        let dateFormatters1:[DateFormatter] = [{
+            let formatter = DateFormatter()
+            formatter.dateFormat = "yyyy-MM-dd' 'HH:mm:ssXXXXX"
+            formatter.locale = Locale(identifier: "en_US_POSIX")
+            formatter.timeZone = TimeZone(secondsFromGMT: 0)
+            return formatter
+        }()]
+
+        do {
+            let value = TestCodableDate.init(int: 1, intOptional: 33, string: "2", stringOptional: "stringOptional1", bool: true, boolOptional: false, float: 3, floatOptional: 3.33, double: 4, doubleOptional: 4.44, date: Date.init(timeIntervalSince1970: 61), dateOptional: Date.init(timeIntervalSince1970: 2*60 + 2.5))
+            let insert = try emails.insert(value, userInfo: [kCodingUserInfoKey_dateFormatters:dateFormatters1])
+            AssertSQL(
+                "INSERT INTO \"emails\" (\"int\", \"intOptional\", \"string\", \"stringOptional\", \"bool\", \"boolOptional\", \"float\", \"floatOptional\", \"double\", \"doubleOptional\", \"date\", \"dateOptional\") VALUES (1, 33, '2', 'stringOptional1', 1, 0, 3.0, 3.3299999237060547, 4.0, 4.44, '1970-01-01 00:01:01Z', '1970-01-01 00:02:02Z')",
+                insert)
+        }
+
+        do {
+            let value1 = TestCodableDate.init(int: 1, intOptional: nil, string: "2", stringOptional: nil, bool: true, boolOptional: nil, float: 3, floatOptional: nil, double: 4, doubleOptional: nil, date: Date.init(timeIntervalSince1970: 61), dateOptional: nil)
+            let insert1 = try emails.insert(value1, userInfo: [kCodingUserInfoKey_dateFormatters:dateFormatters1])
+            AssertSQL(
+                "INSERT INTO \"emails\" (\"int\", \"string\", \"bool\", \"float\", \"double\", \"date\") VALUES (1, '2', 1, 3.0, 4.0, '1970-01-01 00:01:01Z')",
+                insert1)
+        }
+    }
+
+
+    func test_insert_encodable_unix_date() throws {
+
+        let emails = Table("emails")
+
+        let dateFormatters1:[DateFormatter] = [
+            {
+                class unixDateformatter: DateFormatter {
+                    override func string(from date: Date) -> String {
+                        let double = date.timeIntervalSince1970
+                        return "\(double)"
+                    }
+                    override func date(from string: String) -> Date? {
+                        let seconds = Double(string)
+                        return seconds == nil ? nil : Date.init(timeIntervalSince1970: seconds!)
+                    }
+                }
+                return unixDateformatter()
+            }(),
+            {
+                let formatter = DateFormatter()
+                formatter.dateFormat = "yyyy-MM-dd' 'HH:mm:ssXXXXX"
+                formatter.locale = Locale(identifier: "en_US_POSIX")
+                formatter.timeZone = TimeZone(secondsFromGMT: 0)
+                return formatter
+            }()
+        ]
+        let value = TestCodableDate.init(int: 1, intOptional: 11, string: "2", stringOptional: nil, bool: false, boolOptional: true, float: 0, floatOptional: 0, double: 4, doubleOptional: 4.5678, date: Date.init(timeIntervalSince1970: 101.0009765625), dateOptional: Date.init(timeIntervalSince1970: 2*60 + 2.5))
+        let insert = try emails.insert(value, userInfo: [kCodingUserInfoKey_dateFormatters:dateFormatters1])
+        AssertSQL(
+            "INSERT INTO \"emails\" (\"int\", \"intOptional\", \"string\", \"bool\", \"boolOptional\", \"float\", \"floatOptional\", \"double\", \"doubleOptional\", \"date\", \"dateOptional\") VALUES (1, 11, '2', 0, 1, 0.0, 0.0, 4.0, 4.5678, '101.0009765625', '122.5')",
+            insert
+        )
+    }
+
     func test_update_compilesUpdateExpression() {
         AssertSQL(
             "UPDATE \"users\" SET \"age\" = 30, \"admin\" = 1 WHERE (\"id\" = 1)",
@@ -330,6 +408,12 @@ class QueryTests : XCTestCase {
 
     func test_count_returnsCountExpression() {
         AssertSQL("SELECT count(*) FROM \"users\"", users.count)
+    }
+
+    func test_count_filter_returnsCountExpression() {
+        AssertSQL("SELECT count(*) FROM \"users\" WHERE (\"admin\" = 1)", users.count.filter(admin == true))
+        AssertSQL("SELECT count(*) FROM \"users\" WHERE (\"age\" >= 18)", users.count.filter(age >= 18))
+        AssertSQL("SELECT count(*) FROM \"users\" WHERE (\"age\" < 18)", users.count.filter(age < 18))
     }
 
     func test_scalar_returnsScalarExpression() {
@@ -463,6 +547,222 @@ class QueryIntegrationTests : SQLiteTestCase {
         XCTAssertEqual(values[0].sub?.double, 4)
         XCTAssertNil(values[0].sub?.optional)
         XCTAssertNil(values[0].sub?.sub)
+    }
+
+    func test_select_codable_date() throws {
+        let table = Table("codable")
+        try db.run(table.create { builder in
+            builder.column(Expression<Int>("int"))
+            builder.column(Expression<Int?>("intOptional"))
+            builder.column(Expression<String>("string"))
+            builder.column(Expression<String?>("stringOptional"))
+            builder.column(Expression<Bool>("bool"))
+            builder.column(Expression<Bool?>("boolOptional"))
+            builder.column(Expression<Double>("float"))
+            builder.column(Expression<Double?>("floatOptional"))
+            builder.column(Expression<Double>("double"))
+            builder.column(Expression<Double?>("doubleOptional"))
+            builder.column(Expression<Date>("date"))
+            builder.column(Expression<Date?>("dateOptional"))
+        })
+
+        //let value1 = TestCodable(int: 1, string: "2", bool: true, float: 3, double: 4, optional: nil, sub: nil)
+        //let value = TestCodableDate(int: 5, string: "6", bool: true, float: 7, double: 8, optional: "optional", sub: value1, date: Date.init(timeIntervalSince1970: 16.0625))
+        let value = TestCodableDate.init(int: 5, intOptional: 55, string: "6", stringOptional: "6 Opt", bool: true, boolOptional: true, float: -1, floatOptional: -1.1, double: -2, doubleOptional: -2.2, date: Date.init(timeIntervalSince1970: 16.0625), dateOptional: nil)
+
+        try db.run(table.insert(value))
+        try db.run(table.insert(value))
+
+        let rows = try db.prepare(table)
+        let values: [TestCodableDate] = try rows.map({ try $0.decode() })
+        XCTAssertEqual(values.count, 2)
+        XCTAssertEqual(values[0].int, 5)
+        XCTAssertEqual(values[0].intOptional, 55)
+        XCTAssertEqual(values[0].string, "6")
+        XCTAssertEqual(values[0].stringOptional, "6 Opt")
+        XCTAssertEqual(values[0].bool, true)
+        XCTAssertEqual(values[0].boolOptional, true)
+        XCTAssertEqual(values[0].float, -1)
+        XCTAssertEqual(values[0].floatOptional, -1.1)
+        XCTAssertEqual(values[0].double, -2)
+        XCTAssertEqual(values[0].doubleOptional, -2.2)
+        XCTAssertEqual(values[0].date, Date.init(timeIntervalSince1970: 16.063)) // rounded to milliseconds
+        XCTAssertEqual(values[0].dateOptional, nil)
+    }
+
+    func test_select_codable_unixdate() throws {
+        let dateFormatters1:[DateFormatter] = [
+            {
+                class unixDateformatter: DateFormatter {
+                    override func string(from date: Date) -> String {
+                        let double = date.timeIntervalSince1970
+                        return "\(double)"
+                    }
+                    override func date(from string: String) -> Date? {
+                        let seconds = Double(string)
+                        return seconds == nil ? nil : Date.init(timeIntervalSince1970: seconds!)
+                    }
+                }
+                return unixDateformatter()
+            }(),
+            {
+                let formatter = DateFormatter()
+                formatter.dateFormat = "yyyy-MM-dd' 'HH:mm:ssXXXXX"
+                formatter.locale = Locale(identifier: "en_US_POSIX")
+                formatter.timeZone = TimeZone(secondsFromGMT: 0)
+                return formatter
+            }()
+        ]
+
+        let table = Table("codable")
+        try db.run(table.create { builder in
+            builder.column(Expression<Int>("int"))
+            builder.column(Expression<Int?>("intOptional"))
+            builder.column(Expression<String>("string"))
+            builder.column(Expression<String?>("stringOptional"))
+            builder.column(Expression<Bool>("bool"))
+            builder.column(Expression<Bool?>("boolOptional"))
+            builder.column(Expression<Double>("float"))
+            builder.column(Expression<Double?>("floatOptional"))
+            builder.column(Expression<Double>("double"))
+            builder.column(Expression<Double?>("doubleOptional"))
+            builder.column(Expression<Date>("date"))
+            builder.column(Expression<Date?>("dateOptional"))
+        })
+
+        let value = TestCodableDate.init(int: 5, intOptional: 55, string: "6", stringOptional: "6 Opt", bool: true, boolOptional: true, float: -1, floatOptional: -1.1, double: -2, doubleOptional: -2.2, date: Date.init(timeIntervalSince1970: 2.25), dateOptional: nil)
+
+        try db.run(table.insert(value, userInfo: [kCodingUserInfoKey_dateFormatters: dateFormatters1]))
+        // Test REAL and TEXT
+        try db.execute("INSERT INTO \"codable\" (\"int\", \"string\", \"bool\", \"float\", \"double\", \"date\", 'dateOptional') VALUES (3, '2', 1, 3.02, 4.04, 16.0625, '128.0078125')")
+        try db.execute("INSERT INTO \"codable\" (\"int\", \"string\", \"bool\", \"float\", \"double\", \"date\", 'dateOptional') VALUES (4, '5', 1, 3.11, 4.22, -16.0625, NULL)")
+        try db.execute("INSERT INTO \"codable\" (\"int\", \"string\", \"bool\", \"float\", \"double\", \"date\", 'dateOptional') VALUES (4, '5', 1, 3.11, 4.22, 0, '1969-12-31 16:00:00-08:00')")
+
+        let rows = try db.prepare(table)
+        let values: [TestCodableDate] = try rows.map({ try $0.decode(userInfo: [kCodingUserInfoKey_dateFormatters: dateFormatters1]) })
+        XCTAssertEqual(values.count, 4)
+        XCTAssertEqual(values[0].int, 5)
+        XCTAssertEqual(values[0].string, "6")
+        XCTAssertEqual(values[0].bool, true)
+        XCTAssertEqual(values[0].float, -1)
+        XCTAssertEqual(values[0].double, -2)
+        XCTAssertEqual(values[0].date, Date.init(timeIntervalSince1970: 2.25))
+        XCTAssertEqual(values[0].dateOptional, nil)
+        XCTAssertEqual(values[1].date, Date.init(timeIntervalSince1970: 16.0625))
+        XCTAssertEqual(values[1].dateOptional, Date.init(timeIntervalSince1970: 128.0078125))
+        XCTAssertEqual(values[2].date, Date.init(timeIntervalSince1970: -16.0625))
+        XCTAssertEqual(values[2].dateOptional, nil)
+        XCTAssertEqual(values[3].date, Date.init(timeIntervalSince1970: 0))
+        XCTAssertEqual(values[3].dateOptional, Date.init(timeIntervalSince1970: 0))
+    }
+
+    func test_select_codable_optionals() throws {
+        let sqliteURL = FileManager.default.temporaryDirectory.appendingPathComponent("test.sqlite")
+        try? FileManager.default.removeItem(at: sqliteURL)
+        let db1:Connection! = try! Connection.init(sqliteURL.path)
+
+        let table = Table("codable")
+        let buildQuery = table.create(ifNotExists: true) { builder in
+            builder.column(Expression<Int>("int"))
+            builder.column(Expression<Int?>("intOptional"))
+            builder.column(Expression<String>("string"))
+            builder.column(Expression<String?>("stringOptional"))
+            builder.column(Expression<Bool>("bool"))
+            builder.column(Expression<Bool?>("boolOptional"))
+            builder.column(Expression<Double>("float"))
+            builder.column(Expression<Double?>("floatOptional"))
+            builder.column(Expression<Double>("double"))
+            builder.column(Expression<Double?>("doubleOptional"))
+            builder.column(Expression<Date>("date"))
+            builder.column(Expression<Date?>("dateOptional"))
+        }
+
+        try db1.run(buildQuery)
+
+        let value1 = TestCodableDate.init(int: 5, intOptional: 101, string: "6", stringOptional: "6 Opt", bool: true, boolOptional: true, float: 7, floatOptional: -1.1, double: 8, doubleOptional: nil, date: Date.init(timeIntervalSince1970: 16.0625), dateOptional: nil)
+        let value2 = TestCodableDate.init(int: 5, intOptional: 55, string: "6", stringOptional: "6 Opt", bool: false, boolOptional: false, float: 7, floatOptional: -1.1, double: 8, doubleOptional: 1.0/7.0, date: Date.init(timeIntervalSince1970: 16.0625), dateOptional: nil)
+
+
+        try db1.run(table.insert(value1))
+        try db1.run(table.insert(value2))
+        try db1.run("INSERT INTO codable (int,string,bool,float,double,date,doubleOptional) VALUES(5,'6',1,7.0,8.0,'1970-01-01T00:00:16.063','7');")
+        try db1.run("INSERT INTO codable (int,string,stringOptional,bool,float,double,date,doubleOptional) VALUES(5,99,NULL,1,7.0,8.0,'1970-01-01T00:00:16.063','');")
+        try db1.run("INSERT INTO codable VALUES('5','','string A','','0','','7.0','','8.0','','1970-01-01T00:00:16.063','');")
+
+        let rows = try db1.prepare(table)
+        let values: [TestCodableDate] = try rows.map({ try $0.decode() })
+        XCTAssertEqual(values.count, 5)
+        XCTAssertEqual(values[0].int, 5)
+        XCTAssertEqual(values[0].intOptional, 101)
+        XCTAssertEqual(values[0].string, "6")
+        XCTAssertEqual(values[0].stringOptional, "6 Opt")
+        XCTAssertEqual(values[0].bool, true)
+        XCTAssertEqual(values[0].boolOptional, true)
+        XCTAssertEqual(values[0].float, 7)
+        XCTAssertEqual(values[0].floatOptional, -1.1)
+        XCTAssertEqual(values[0].double, 8)
+        XCTAssertEqual(values[0].dateOptional, nil)
+        XCTAssertEqual(values[0].date, Date.init(timeIntervalSince1970: 16.063)) // rounded to milliseconds
+        XCTAssertEqual(values[0].doubleOptional, nil)
+        XCTAssertEqual(values[1].doubleOptional, 1.0/7.0)
+        XCTAssertEqual(values[2].doubleOptional, 7.0)
+        XCTAssertEqual(values[3].string, "99")
+        XCTAssertEqual(values[3].stringOptional, nil)
+        XCTAssertEqual(values[3].doubleOptional, nil)
+        XCTAssertEqual(values[4].int, 5)
+        XCTAssertEqual(values[4].intOptional, nil)
+        XCTAssertEqual(values[4].string, "string A")
+        XCTAssertEqual(values[4].stringOptional, "")
+        XCTAssertEqual(values[4].bool, false)
+        XCTAssertEqual(values[4].boolOptional, nil)
+        XCTAssertEqual(values[4].float, 7)
+        XCTAssertEqual(values[4].floatOptional, nil)
+        XCTAssertEqual(values[4].double, 8)
+        XCTAssertEqual(values[4].dateOptional, nil)
+        XCTAssertEqual(values[4].date, Date.init(timeIntervalSince1970: 16.063)) // rounded to milliseconds
+    }
+
+    func test_select_codable_case_insensitive() throws {
+        let table = Table("Codable")
+        try db.run(table.create { builder in
+            builder.column(Expression<Int>("INT"))
+            builder.column(Expression<Int?>("intOptional"))
+            builder.column(Expression<String>("string"))
+            builder.column(Expression<String?>("stringOptional"))
+            builder.column(Expression<Bool>("BOOL"))
+            builder.column(Expression<Bool?>("boolOptional".uppercased()))
+            builder.column(Expression<Double>("float"))
+            builder.column(Expression<Double?>("floatOptional"))
+            builder.column(Expression<Double>("double"))
+            builder.column(Expression<Double?>("doubleOptional"))
+            builder.column(Expression<Date>("date"))
+            builder.column(Expression<Date?>("dateOptional"))
+        })
+
+        let value = TestCodableDate.init(int: 5, intOptional: 55, string: "6", stringOptional: "6 Opt", bool: true, boolOptional: true, float: -1, floatOptional: -1.1, double: -2, doubleOptional: -2.2, date: Date.init(timeIntervalSince1970: 16.0625), dateOptional: nil)
+
+        try db.run(table.insert(value))
+        try db.run(table.insert(value))
+        try db.run("INSERT INTO \"CODABLE\" (int,string,BOOL,FLOAT,double,date,doubleOptional) VALUES(781,'6',1,7.25,8.0,'1970-01-01T00:00:16.063','7');")
+
+        let rows = try db.prepare(table)
+        let values: [TestCodableDate] = try rows.map({ try $0.decode() })
+        XCTAssertEqual(values.count, 3)
+        XCTAssertEqual(values[0].int, 5)
+        XCTAssertEqual(values[0].intOptional, 55)
+        XCTAssertEqual(values[0].string, "6")
+        XCTAssertEqual(values[0].stringOptional, "6 Opt")
+        XCTAssertEqual(values[0].bool, true)
+        XCTAssertEqual(values[0].boolOptional, true)
+        XCTAssertEqual(values[0].float, -1)
+        XCTAssertEqual(values[0].floatOptional, -1.1)
+        XCTAssertEqual(values[0].double, -2)
+        XCTAssertEqual(values[0].doubleOptional, -2.2)
+        XCTAssertEqual(values[0].date, Date.init(timeIntervalSince1970: 16.063)) // rounded to milliseconds
+        XCTAssertEqual(values[0].dateOptional, nil)
+
+        XCTAssertEqual(values[2].int, 781)
+        XCTAssertEqual(values[2].float, 7.25)
     }
 
     func test_scalar() {

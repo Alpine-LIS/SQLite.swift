@@ -152,6 +152,13 @@ public final class Connection {
         return Int(sqlite3_total_changes(handle))
     }
 
+//    /// For `Codable` structures or classes this dictionary  to code Date formats.
+//    ///
+//    /// Example,
+//    /// `db.codingUserInfo = [kCodingUserInfoKey_dateFormatters: [dateFormatter1, dateFormatter2]]`
+//    /// where the first element is used for encoding and when decoding the first formatter to succeed returns its results.
+//    public var codingUserInfo: [CodingUserInfoKey : Any]?
+
     // MARK: - Execute
 
     /// Executes a batch of SQL statements.
@@ -429,6 +436,7 @@ public final class Connection {
     fileprivate func trace_v1(_ callback: ((String) -> Void)?) {
         guard let callback = callback else {
             sqlite3_trace(handle, nil /* xCallback */, nil /* pCtx */)
+            // sqlite3_trace_v2(handle, 0, nil, nil)
             trace = nil
             return
         }

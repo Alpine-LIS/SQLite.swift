@@ -24,6 +24,8 @@
 
 import Foundation
 
+public let kCodingUserInfoKey_dateFormatters = CodingUserInfoKey.init(rawValue: "dateFormatters")!
+
 extension QueryType {
     /// Creates an `INSERT` statement by encoding the given object
     /// This method converts any custom nested types to JSON data and does not handle any sort
@@ -43,6 +45,12 @@ extension QueryType {
         let encoder = SQLiteEncoder(userInfo: userInfo)
         try encodable.encode(to: encoder)
         return self.insert(encoder.setters + otherSetters)
+    }
+
+    public func insert(or onConflict: OnConflict,_ encodable: Encodable, userInfo: [CodingUserInfoKey:Any] = [:], otherSetters: [Setter] = []) throws -> Insert {
+        let encoder = SQLiteEncoder(userInfo: userInfo)
+        try encodable.encode(to: encoder)
+        return self.insert(or: onConflict, encoder.setters + otherSetters)
     }
 
     /// Creates an `UPDATE` statement by encoding the given object
@@ -91,9 +99,11 @@ fileprivate class SQLiteEncoder: Encoder {
 
         let encoder: SQLiteEncoder
         let codingPath: [CodingKey] = []
+        let userInfo: [CodingUserInfoKey: Any]
 
-        init(encoder: SQLiteEncoder) {
+        init(encoder: SQLiteEncoder,  userInfo: [CodingUserInfoKey: Any]) {
             self.encoder = encoder
+            self.userInfo = userInfo
         }
 
         func superEncoder() -> Swift.Encoder {
@@ -128,9 +138,20 @@ fileprivate class SQLiteEncoder: Encoder {
             self.encoder.setters.append(Expression(key.stringValue) <- value)
         }
 
+        // MARK: Data Date & JSON
         func encode<T>(_ value: T, forKey key: Key) throws where T : Swift.Encodable {
             if let data = value as? Data {
                 self.encoder.setters.append(Expression(key.stringValue) <- data)
+            }
+            else if let date = value as? Date {
+                if let formatters = userInfo[kCodingUserInfoKey_dateFormatters] as? [DateFormatter],
+                   let dateFormatter = formatters.first
+                {
+                    let dateString = dateFormatter.string(from: date)
+                    self.encoder.setters.append(Expression(key.stringValue) <- dateString)
+                }  else {
+                    self.encoder.setters.append(Expression(key.stringValue) <- date)
+                }
             }
             else {
                 let encoded = try JSONEncoder().encode(value)
@@ -201,7 +222,7 @@ fileprivate class SQLiteEncoder: Encoder {
     }
 
     func container<Key>(keyedBy type: Key.Type) -> KeyedEncodingContainer<Key> where Key : CodingKey {
-        return KeyedEncodingContainer(SQLiteKeyedEncodingContainer(encoder: self))
+        return KeyedEncodingContainer(SQLiteKeyedEncodingContainer(encoder: self, userInfo: userInfo))
     }
 }
 
@@ -211,9 +232,11 @@ fileprivate class SQLiteDecoder : Decoder {
 
         let codingPath: [CodingKey] = []
         let row: Row
+        let userInfo: [CodingUserInfoKey: Any]
 
-        init(row: Row) {
+        init(row: Row, userInfo: [CodingUserInfoKey: Any]) {
             self.row = row
+            self.userInfo = userInfo
         }
 
         var allKeys: [Key] {
@@ -232,7 +255,15 @@ fileprivate class SQLiteDecoder : Decoder {
             return try self.row.get(Expression(key.stringValue))
         }
 
+        func decodeIfPresent(_ type: Bool.Type, forKey key: Key) throws -> Bool? {
+            return try self.row.get(Expression(key.stringValue))
+        }
+
         func decode(_ type: Int.Type, forKey key: Key) throws -> Int {
+            return try self.row.get(Expression(key.stringValue))
+        }
+
+        func decodeIfPresent(_ type: Int.Type, forKey key: Key) throws -> Int? {
             return try self.row.get(Expression(key.stringValue))
         }
 
@@ -254,7 +285,6 @@ fileprivate class SQLiteDecoder : Decoder {
 
         func decode(_ type: UInt.Type, forKey key: Key) throws -> UInt {
             throw DecodingError.typeMismatch(type, DecodingError.Context(codingPath: self.codingPath, debugDescription: "decoding an UInt is not supported"))
-
         }
 
         func decode(_ type: UInt8.Type, forKey key: Key) throws -> UInt8 {
@@ -277,7 +307,16 @@ fileprivate class SQLiteDecoder : Decoder {
             return Float(try self.row.get(Expression<Double>(key.stringValue)))
         }
 
+        func decodeIfPresent(_ type: Float.Type, forKey key: Key) throws -> Float? {
+            let double = try self.row.get(Expression<Double?>(key.stringValue))
+            return double == nil ? nil : Float(double!)
+        }
+
         func decode(_ type: Double.Type, forKey key: Key) throws -> Double {
+            return try self.row.get(Expression(key.stringValue))
+        }
+
+        func decodeIfPresent(_ type: Double.Type, forKey key: MyKey) throws -> Double? {
             return try self.row.get(Expression(key.stringValue))
         }
 
@@ -285,11 +324,56 @@ fileprivate class SQLiteDecoder : Decoder {
             return try self.row.get(Expression(key.stringValue))
         }
 
+        func decodeIfPresent(_ type: String.Type, forKey key: Key) throws -> String? {
+            return try self.row.get(Expression(key.stringValue))
+        }
+
+        // MARK: Data Date & JSON
         func decode<T>(_ type: T.Type, forKey key: Key) throws -> T where T: Swift.Decodable {
             if type == Data.self {
                 let data = try self.row.get(Expression<Data>(key.stringValue))
                 return data as! T
             }
+            else if type == Date.self {
+                if let formatters = userInfo[kCodingUserInfoKey_dateFormatters] as? [DateFormatter] {
+                    let dateString = try self.row.get(Expression<String>(key.stringValue))
+                    for dateFormater in formatters {
+                        if let date = dateFormater.date(from: dateString) {
+                            return date as! T
+                        }
+                    }
+                }
+                let date = try self.row.get(Expression<Date>(key.stringValue))
+                return date as! T
+            }
+
+            guard let JSONString = try self.row.get(Expression<String?>(key.stringValue)) else {
+                throw DecodingError.typeMismatch(type, DecodingError.Context(codingPath: self.codingPath, debugDescription: "an unsupported type was found"))
+            }
+            guard let data = JSONString.data(using: .utf8) else {
+                throw DecodingError.dataCorrupted(DecodingError.Context(codingPath: self.codingPath, debugDescription: "invalid utf8 data found"))
+            }
+            return try JSONDecoder().decode(type, from: data)
+        }
+
+        func decodeIfPresent<T>(_ type: T.Type, forKey key: MyKey) throws -> T? where T : Decodable {
+            if type == Data.self {
+                let data = try self.row.get(Expression<Data?>(key.stringValue))
+                return data as? T
+            }
+            else if type == Date.self {
+                if let formatters = userInfo[kCodingUserInfoKey_dateFormatters] as? [DateFormatter],
+                   let dateString = try self.row.get(Expression<String?>(key.stringValue)) {
+                    for dateFormater in formatters {
+                        if let date = dateFormater.date(from: dateString) {
+                            return date as? T
+                        }
+                    }
+                }
+                let date = try self.row.get(Expression<Date?>(key.stringValue))
+                return date as? T
+            }
+
             guard let JSONString = try self.row.get(Expression<String?>(key.stringValue)) else {
                 throw DecodingError.typeMismatch(type, DecodingError.Context(codingPath: self.codingPath, debugDescription: "an unsupported type was found"))
             }
@@ -320,21 +404,92 @@ fileprivate class SQLiteDecoder : Decoder {
     let codingPath: [CodingKey] = []
     let userInfo: [CodingUserInfoKey: Any]
 
-    init(row: Row, userInfo: [CodingUserInfoKey: Any]) {
+    init(row: Row, userInfo: [CodingUserInfoKey: Any] = [:]) {
         self.row = row
         self.userInfo = userInfo
     }
 
     func container<Key>(keyedBy type: Key.Type) throws -> KeyedDecodingContainer<Key> where Key : CodingKey {
-        return KeyedDecodingContainer(SQLiteKeyedDecodingContainer(row: self.row))
+        return KeyedDecodingContainer(SQLiteKeyedDecodingContainer(row: self.row, userInfo: userInfo))
     }
 
     func unkeyedContainer() throws -> UnkeyedDecodingContainer {
         throw DecodingError.dataCorrupted(DecodingError.Context(codingPath: self.codingPath, debugDescription: "decoding an unkeyed container is not supported"))
     }
 
+    // This gets called for when a row is optional, e.g. `let myObject: V? = try row?.decode()`,
     func singleValueContainer() throws -> SingleValueDecodingContainer {
-        throw DecodingError.dataCorrupted(DecodingError.Context(codingPath: self.codingPath, debugDescription: "decoding a single value container is not supported"))
+        return SQLiteSingleValueDecodingContainer(row: self.row, userInfo: userInfo)
     }
 }
 
+
+fileprivate extension SQLiteDecoder {
+
+    // Used for optional row decodes, eg. `let myObject: V? = try row?.decode()`
+    class SQLiteSingleValueDecodingContainer:SingleValueDecodingContainer {
+
+        let codingPath: [CodingKey] = []
+        let row: Row
+        let userInfo: [CodingUserInfoKey: Any]
+
+        init(row: Row, userInfo: [CodingUserInfoKey: Any]) {
+            self.row = row
+            self.userInfo = userInfo
+        }
+
+        // Return false for `row?.decode()` to function.
+        func decodeNil() -> Bool {
+            false
+        }
+
+        func decode<T>(_ type: T.Type) throws -> T where T : Decodable {
+            let value:T = try row.decode(userInfo: userInfo)
+            return value
+        }
+
+        func decode(_ type: Bool.Type) throws -> Bool {
+            fatalError("DECODING SINGLE VALUE TYPE \(type) IS NOT SUPPORTED")
+        }
+        func decode(_ type: String.Type) throws -> String {
+            fatalError("DECODING SINGLE VALUE TYPE \(type) IS NOT SUPPORTED")
+        }
+        func decode(_ type: Double.Type) throws -> Double {
+            fatalError("DECODING SINGLE VALUE TYPE \(type) IS NOT SUPPORTED")
+        }
+        func decode(_ type: Float.Type) throws -> Float {
+            fatalError("DECODING SINGLE VALUE TYPE \(type) IS NOT SUPPORTED")
+        }
+        func decode(_ type: Int.Type) throws -> Int {
+            fatalError("DECODING SINGLE VALUE TYPE \(type) IS NOT SUPPORTED")
+        }
+        func decode(_ type: Int8.Type) throws -> Int8 {
+            fatalError("DECODING SINGLE VALUE TYPE \(type) IS NOT SUPPORTED")
+        }
+        func decode(_ type: Int16.Type) throws -> Int16 {
+            fatalError("DECODING SINGLE VALUE TYPE \(type) IS NOT SUPPORTED")
+        }
+        func decode(_ type: Int32.Type) throws -> Int32 {
+            fatalError("DECODING SINGLE VALUE TYPE \(type) IS NOT SUPPORTED")
+        }
+        func decode(_ type: Int64.Type) throws -> Int64 {
+            fatalError("DECODING SINGLE VALUE TYPE \(type) IS NOT SUPPORTED")
+        }
+        func decode(_ type: UInt.Type) throws -> UInt {
+            fatalError("DECODING SINGLE VALUE TYPE \(type) IS NOT SUPPORTED")
+        }
+        func decode(_ type: UInt8.Type) throws -> UInt8 {
+            fatalError("DECODING SINGLE VALUE TYPE \(type) IS NOT SUPPORTED")
+        }
+        func decode(_ type: UInt16.Type) throws -> UInt16 {
+            fatalError("DECODING SINGLE VALUE TYPE \(type) IS NOT SUPPORTED")
+        }
+        func decode(_ type: UInt32.Type) throws -> UInt32 {
+            fatalError("DECODING SINGLE VALUE TYPE \(type) IS NOT SUPPORTED")
+        }
+        func decode(_ type: UInt64.Type) throws -> UInt64 {
+            fatalError("DECODING SINGLE VALUE TYPE \(type) IS NOT SUPPORTED")
+        }
+
+    }
+}

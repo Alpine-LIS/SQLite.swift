@@ -903,7 +903,7 @@ public struct RowIterator: FailableIterator {
     let columnNames: [String: Int]
 
     public func failableNext() throws -> Row? {
-        return try statement.failableNext().flatMap { Row(columnNames, $0) }
+        return try statement.failableNext().flatMap { Row(columnNames, $0, uppercased: true) }
     }
 
     public func map<T>(_ transform: (Element) throws -> T) throws -> [T] {
@@ -924,7 +924,7 @@ extension Connection {
         let columnNames = try columnNamesForQuery(query)
 
         return AnySequence {
-            AnyIterator { statement.next().map { Row(columnNames, $0) } }
+            AnyIterator { statement.next().map { Row(columnNames, $0, uppercased: true) } }
         }
     }
     
@@ -937,7 +937,9 @@ extension Connection {
 
     private func columnNamesForQuery(_ query: QueryType) throws -> [String: Int] {
         var (columnNames, idx) = ([String: Int](), 0)
-        column: for each in query.clauses.select.columns {
+
+        for_column:
+        for each in query.clauses.select.columns {
             var names = each.expression.template.split { $0 == "." }.map(String.init)
             let column = names.removeLast()
             let namespace = names.joined(separator: ".")
@@ -949,7 +951,14 @@ extension Connection {
                     let e = q.expression
                     var names = try self.prepare(e.template, e.bindings).columnNames.map { $0.quote() }
                     if namespace { names = names.map { "\(query.tableName().expression.template).\($0)" } }
-                    for name in names { columnNames[name] = idx; idx += 1 }
+                    for name in names {
+                        #if USE_UPPERCASE
+                        columnNames[name.uppercased()] = idx;
+                        #else
+                        columnNames[name] = idx;
+                        #endif
+                        idx += 1
+                    }
                 }
             }
             
@@ -961,7 +970,7 @@ extension Connection {
                     for q in queries {
                         if q.tableName().expression.template == namespace {
                             try expandGlob(true)(q)
-                            continue column
+                            continue for_column
                         }
                         throw QueryError.noSuchTable(name: namespace)
                     }
@@ -972,10 +981,15 @@ extension Connection {
                 }
                 continue
             }
-            
+
+            #if USE_UPPERCASE
+            columnNames[each.expression.template.uppercased()] = idx
+            #else
             columnNames[each.expression.template] = idx
+            #endif
             idx += 1
         }
+
         return columnNames
     }
 
@@ -1056,14 +1070,25 @@ extension Connection {
 
 }
 
+// MARK: - ROW
+
 public struct Row {
 
     let columnNames: [String: Int]
 
     fileprivate let values: [Binding?]
 
-    internal init(_ columnNames: [String: Int], _ values: [Binding?]) {
-        self.columnNames = columnNames
+    internal init(_ columnNames: [String: Int], _ values: [Binding?], uppercased: Bool = false) {
+        if uppercased {
+            self.columnNames = columnNames
+        } else {
+            var columnNames1 = Dictionary<String,Int>.init(minimumCapacity: columnNames.count)  // columnNames.map({ })
+            columnNames.forEach { (arg0) in
+                let (key, value) = arg0
+                columnNames1[key.uppercased()] = value
+            }
+            self.columnNames = columnNames1
+        }
         self.values = values
     }
 
@@ -1093,8 +1118,14 @@ public struct Row {
             return V.fromDatatypeValue(value) as? V
         }
 
-        guard let idx = columnNames[column.template] else {
-            let similar = Array(columnNames.keys).filter { $0.hasSuffix(".\(column.template)") }
+        #if USE_UPPERCASE
+        let column_template = column.template.uppercased()
+        #else
+        let column_template = column.template
+        #endif
+
+        guard let idx = columnNames[column_template] else {
+            let similar = Array(columnNames.keys).filter { $0.hasSuffix(".\(column_template)") }
 
             switch similar.count {
             case 0:

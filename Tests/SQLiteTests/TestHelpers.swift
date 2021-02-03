@@ -106,6 +106,17 @@ let virtualTable = VirtualTable("virtual_table")
 let _view = View("view") // avoid Mac XCTestCase collision
 
 class TestCodable: Codable {
+
+    enum CodingKeys: String, CodingKey {
+        case int
+        case string
+        case bool
+        case float
+        case double
+        case optional
+        case sub
+    }
+
     let int: Int
     let string: String
     let bool: Bool
@@ -123,4 +134,35 @@ class TestCodable: Codable {
         self.optional = optional
         self.sub = sub
     }
+}
+
+struct TestCodableDate: Codable {
+
+    enum CodingKeys: String, CodingKey {
+        case int
+        case intOptional
+        case string = "string"
+        case stringOptional
+        case bool
+        case boolOptional
+        case float
+        case floatOptional
+        case double
+        case doubleOptional
+        case date
+        case dateOptional
+    }
+
+    let int: Int
+    let intOptional: Int?
+    let string: String
+    let stringOptional: String?
+    let bool: Bool
+    let boolOptional: Bool?
+    let float: Float
+    let floatOptional: Float?
+    let double: Double
+    let doubleOptional: Double?
+    let date: Date
+    let dateOptional: Date?
 }

@@ -46,7 +46,11 @@ class RowTests : XCTestCase {
     }
 
     public func test_get_type_mismatch_throws_unexpected_null_value() {
+        #if USE_UPPERCASE
+        let row = Row(["\"FOO\"": 0], ["value"])
+        #else
         let row = Row(["\"foo\"": 0], ["value"])
+        #endif
         XCTAssertThrowsError(try row.get(Expression<Int>("foo"))) { error in
             if case QueryError.unexpectedNullValue(let name) = error {
                 XCTAssertEqual("\"foo\"", name)
@@ -57,7 +61,11 @@ class RowTests : XCTestCase {
     }
 
     public func test_get_type_mismatch_optional_returns_nil() {
+        #if USE_UPPERCASE
+        let row = Row(["\"FOO\"": 0], ["value"])
+        #else
         let row = Row(["\"foo\"": 0], ["value"])
+        #endif
         let result = try! row.get(Expression<Int?>("foo"))
         XCTAssertNil(result)
     }
@@ -67,7 +75,11 @@ class RowTests : XCTestCase {
         XCTAssertThrowsError(try row.get(Expression<Int>("bar"))) { error in
             if case QueryError.noSuchColumn(let name, let columns) = error {
                 XCTAssertEqual("\"bar\"", name)
+                #if USE_UPPERCASE
+                XCTAssertEqual(["\"foo\"".uppercased()], columns)
+                #else
                 XCTAssertEqual(["\"foo\""], columns)
+                #endif
             } else {
                 XCTFail("unexpected error: \(error)")
             }
@@ -75,11 +87,15 @@ class RowTests : XCTestCase {
     }
 
     public func test_get_ambiguous_column_throws() {
-        let row = Row(["table1.\"foo\"": 0, "table2.\"foo\"": 1], ["value"])
+        let row = Row(["table1.\"foo\"": 0, "table2.\"foo\"": 1], ["value"], uppercased: false)
         XCTAssertThrowsError(try row.get(Expression<Int>("foo"))) { error in
             if case QueryError.ambiguousColumn(let name, let columns) = error {
                 XCTAssertEqual("\"foo\"", name)
+                #if USE_UPPERCASE
+                XCTAssertEqual(["table1.\"foo\"".uppercased(), "table2.\"foo\"".uppercased()], columns.sorted())
+                #else
                 XCTAssertEqual(["table1.\"foo\"", "table2.\"foo\""], columns.sorted())
+                #endif
             } else {
                 XCTFail("unexpected error: \(error)")
             }
