@@ -141,8 +141,8 @@ struct TestCodableDate: Codable {
     enum CodingKeys: String, CodingKey {
         case int
         case intOptional
-        case string = "string"
-        case stringOptional
+        case string
+        case stringOptional = "string_optional"
         case bool
         case boolOptional
         case float

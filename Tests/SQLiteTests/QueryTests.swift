@@ -275,9 +275,7 @@ class QueryTests : XCTestCase {
     }
 
     func test_insert_encodable_date() throws {
-
         let emails = Table("emails")
-
         do {
             let value = TestCodableDate(int: 1, intOptional: nil, string: "2", stringOptional: nil, bool: true, boolOptional: nil, float: 3, floatOptional: nil, double: 4, doubleOptional: nil, date: Date.init(timeIntervalSince1970: 3*60 + 1.234567), dateOptional: nil)
             let insert = try emails.insert(value)
@@ -286,7 +284,6 @@ class QueryTests : XCTestCase {
                 insert
             )
         }
-
 
         let dateFormatters1:[DateFormatter] = [{
             let formatter = DateFormatter()
@@ -300,7 +297,7 @@ class QueryTests : XCTestCase {
             let value = TestCodableDate.init(int: 1, intOptional: 33, string: "2", stringOptional: "stringOptional1", bool: true, boolOptional: false, float: 3, floatOptional: 3.33, double: 4, doubleOptional: 4.44, date: Date.init(timeIntervalSince1970: 61), dateOptional: Date.init(timeIntervalSince1970: 2*60 + 2.5))
             let insert = try emails.insert(value, userInfo: [kCodingUserInfoKey_dateFormatters:dateFormatters1])
             AssertSQL(
-                "INSERT INTO \"emails\" (\"int\", \"intOptional\", \"string\", \"stringOptional\", \"bool\", \"boolOptional\", \"float\", \"floatOptional\", \"double\", \"doubleOptional\", \"date\", \"dateOptional\") VALUES (1, 33, '2', 'stringOptional1', 1, 0, 3.0, 3.3299999237060547, 4.0, 4.44, '1970-01-01 00:01:01Z', '1970-01-01 00:02:02Z')",
+                "INSERT INTO \"emails\" (\"int\", \"intOptional\", \"string\", \"string_optional\", \"bool\", \"boolOptional\", \"float\", \"floatOptional\", \"double\", \"doubleOptional\", \"date\", \"dateOptional\") VALUES (1, 33, '2', 'stringOptional1', 1, 0, 3.0, 3.3299999237060547, 4.0, 4.44, '1970-01-01 00:01:01Z', '1970-01-01 00:02:02Z')",
                 insert)
         }
 
@@ -313,11 +310,8 @@ class QueryTests : XCTestCase {
         }
     }
 
-
     func test_insert_encodable_unix_date() throws {
-
         let emails = Table("emails")
-
         let dateFormatters1:[DateFormatter] = [
             {
                 class unixDateformatter: DateFormatter {
@@ -555,7 +549,7 @@ class QueryIntegrationTests : SQLiteTestCase {
             builder.column(Expression<Int>("int"))
             builder.column(Expression<Int?>("intOptional"))
             builder.column(Expression<String>("string"))
-            builder.column(Expression<String?>("stringOptional"))
+            builder.column(Expression<String?>("string_optional"))
             builder.column(Expression<Bool>("bool"))
             builder.column(Expression<Bool?>("boolOptional"))
             builder.column(Expression<Double>("float"))
@@ -619,7 +613,7 @@ class QueryIntegrationTests : SQLiteTestCase {
             builder.column(Expression<Int>("int"))
             builder.column(Expression<Int?>("intOptional"))
             builder.column(Expression<String>("string"))
-            builder.column(Expression<String?>("stringOptional"))
+            builder.column(Expression<String?>("string_optional"))
             builder.column(Expression<Bool>("bool"))
             builder.column(Expression<Bool?>("boolOptional"))
             builder.column(Expression<Double>("float"))
@@ -666,7 +660,7 @@ class QueryIntegrationTests : SQLiteTestCase {
             builder.column(Expression<Int>("int"))
             builder.column(Expression<Int?>("intOptional"))
             builder.column(Expression<String>("string"))
-            builder.column(Expression<String?>("stringOptional"))
+            builder.column(Expression<String?>("string_optional"))
             builder.column(Expression<Bool>("bool"))
             builder.column(Expression<Bool?>("boolOptional"))
             builder.column(Expression<Double>("float"))
@@ -680,14 +674,14 @@ class QueryIntegrationTests : SQLiteTestCase {
         try db1.run(buildQuery)
 
         let value1 = TestCodableDate.init(int: 5, intOptional: 101, string: "6", stringOptional: "6 Opt", bool: true, boolOptional: true, float: 7, floatOptional: -1.1, double: 8, doubleOptional: nil, date: Date.init(timeIntervalSince1970: 16.0625), dateOptional: nil)
-        let value2 = TestCodableDate.init(int: 5, intOptional: 55, string: "6", stringOptional: "6 Opt", bool: false, boolOptional: false, float: 7, floatOptional: -1.1, double: 8, doubleOptional: 1.0/7.0, date: Date.init(timeIntervalSince1970: 16.0625), dateOptional: nil)
+        let value2 = TestCodableDate.init(int: 51, intOptional: 55, string: "6", stringOptional: "6 Opt", bool: false, boolOptional: false, float: 7, floatOptional: -1.1, double: 8, doubleOptional: 1.0/7.0, date: Date.init(timeIntervalSince1970: 16.0625), dateOptional: nil)
 
 
         try db1.run(table.insert(value1))
         try db1.run(table.insert(value2))
         try db1.run("INSERT INTO codable (int,string,bool,float,double,date,doubleOptional) VALUES(5,'6',1,7.0,8.0,'1970-01-01T00:00:16.063','7');")
-        try db1.run("INSERT INTO codable (int,string,stringOptional,bool,float,double,date,doubleOptional) VALUES(5,99,NULL,1,7.0,8.0,'1970-01-01T00:00:16.063','');")
-        try db1.run("INSERT INTO codable VALUES('5','','string A','','0','','7.0','','8.0','','1970-01-01T00:00:16.063','');")
+        try db1.run("INSERT INTO codable (int,string,string_optional,bool,float,double,date,doubleOptional) VALUES(5,99,NULL,1,7.0,8.0,'1970-01-01T00:00:16.063','');")
+        try db1.run("INSERT INTO codable VALUES('-554','','string A','','0','','7.0','','8.0','','1970-01-01T00:00:16.063','');")
 
         let rows = try db1.prepare(table)
         let values: [TestCodableDate] = try rows.map({ try $0.decode() })
@@ -709,7 +703,7 @@ class QueryIntegrationTests : SQLiteTestCase {
         XCTAssertEqual(values[3].string, "99")
         XCTAssertEqual(values[3].stringOptional, nil)
         XCTAssertEqual(values[3].doubleOptional, nil)
-        XCTAssertEqual(values[4].int, 5)
+        XCTAssertEqual(values[4].int, -554)
         XCTAssertEqual(values[4].intOptional, nil)
         XCTAssertEqual(values[4].string, "string A")
         XCTAssertEqual(values[4].stringOptional, "")
@@ -728,7 +722,7 @@ class QueryIntegrationTests : SQLiteTestCase {
             builder.column(Expression<Int>("INT"))
             builder.column(Expression<Int?>("intOptional"))
             builder.column(Expression<String>("string"))
-            builder.column(Expression<String?>("stringOptional"))
+            builder.column(Expression<String?>("string_optional"))
             builder.column(Expression<Bool>("BOOL"))
             builder.column(Expression<Bool?>("boolOptional".uppercased()))
             builder.column(Expression<Double>("float"))
@@ -763,6 +757,87 @@ class QueryIntegrationTests : SQLiteTestCase {
 
         XCTAssertEqual(values[2].int, 781)
         XCTAssertEqual(values[2].float, 7.25)
+    }
+
+    func test_decodable_optional_row() throws {
+        let table = Table("Codable")
+        try db.run(table.create { builder in
+            builder.column(Expression<Int>("INT"))
+            builder.column(Expression<Int?>("intOptional"))
+            builder.column(Expression<String>("string"))
+            builder.column(Expression<String?>("string_optional"))
+            builder.column(Expression<Bool>("BOOL"))
+            builder.column(Expression<Bool?>("boolOptional".uppercased()))
+            builder.column(Expression<Double>("float"))
+            builder.column(Expression<Double?>("floatOptional"))
+            builder.column(Expression<Double>("double"))
+            builder.column(Expression<Double?>("doubleOptional"))
+            builder.column(Expression<Date>("date"))
+            builder.column(Expression<Date?>("dateOptional"))
+        })
+
+        let value1 = TestCodableDate.init(int: 0x100, intOptional: 1, string: "6", stringOptional: "6 Opt", bool: true, boolOptional: true, float: -1, floatOptional: -1.1, double: -2, doubleOptional: -2.2, date: Date.init(timeIntervalSince1970: 16.0625), dateOptional: nil)
+
+        let value2 = TestCodableDate.init(int: 0x100, intOptional: 2, string: "6", stringOptional: "6 Opt", bool: true, boolOptional: true, float: -1, floatOptional: -1.1, double: -2, doubleOptional: -2.2, date: Date.init(timeIntervalSince1970: 16.0625), dateOptional: nil)
+
+        try db.run(table.insert(value1))
+        try db.run(table.insert(value2))
+        try db.run("INSERT INTO \"CODABLE\" (int,intOptional,string,BOOL,FLOAT,double,date,doubleOptional) VALUES(1001,0x3,'string',1,7.25,8.0,'1970-01-01T00:00:16.063','7');")
+        try db.run("INSERT INTO \"CODABLE\" (int,intOptional,string,BOOL,FLOAT,double,date,doubleOptional) VALUES(1001,'4','string',1,7.25,8.0,'1970-01-01T00:00:16.063','7');")
+
+        let rows = try db.prepare(table)
+        let values: [TestCodableDate] = try rows.map({ try $0.decode() })
+        XCTAssertEqual(values.count, 4)
+        XCTAssertEqual(values[0].int, 0x100)
+        XCTAssertEqual(values[1].int, 0x100)
+        XCTAssertEqual(values[2].int, 1001)
+        XCTAssertEqual(values[3].int, 1001)
+        XCTAssertEqual(values[0].intOptional, 1)
+        XCTAssertEqual(values[1].intOptional, 2)
+        XCTAssertEqual(values[2].intOptional, 3)
+        XCTAssertEqual(values[3].intOptional, 4)
+
+        // Matches
+        do {
+            let row1 = try db.pluck(table.where(Expression<Int>("INT") == 256))
+            let result1: TestCodableDate? = try row1?.decode()
+            XCTAssertEqual(result1?.intOptional, 1)
+        }
+        do {
+            let row2 = try db.pluck(table.where(Expression<Int>("INT") == 256).order(Expression<Int>("rowid").desc))
+            let result2: TestCodableDate? = try row2?.decode()
+            XCTAssertEqual(result2?.intOptional, 2)
+        }
+        do {
+            let row3 = try db.pluck(table.where(Expression<Int>("INT") == 1001))
+            let result3: TestCodableDate = try row3!.decode()
+            XCTAssertEqual(result3.intOptional, 3)
+        }
+        do {
+            let row4 = try db.pluck(table.where(Expression<Int>("INT") == 1001).order(Expression<Int>("ROWID").desc))
+            let result4: TestCodableDate = try row4!.decode()
+            XCTAssertEqual(result4.intOptional, 4)
+        }
+
+        // Misses
+        do {
+            let row1 = try db.pluck(table.where(Expression<Int>("INT") == 0))
+            let result1: TestCodableDate? = try row1?.decode()
+            XCTAssertEqual(result1?.intOptional, nil)
+        }
+        do {
+            let row2 = try db.pluck(table.where(Expression<Int>("INT") == 0).order(Expression<Int>("rowid").desc))
+            let result2: TestCodableDate? = try row2?.decode()
+            XCTAssertEqual(result2?.intOptional, nil)
+        }
+        do {
+            let row3 = try db.pluck(table.where(Expression<Int>("INT") == 0))
+            XCTAssertNil(row3)
+        }
+        do {
+            let row4 = try db.pluck(table.where(Expression<Int>("INT") == 0).order(Expression<Int>("ROWID").desc))
+            XCTAssertNil(row4)
+        }
     }
 
     func test_scalar() {
