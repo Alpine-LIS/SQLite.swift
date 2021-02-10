@@ -71,19 +71,19 @@ public class DateFunctions {
 
 extension Date {
     public var date: Expression<Date?> {
-        return DateFunctions.date(dateFormatter.string(from: self))
+        return DateFunctions.date(DateFunctions.dateFormatter.string(from: self))
     }
 
     public var time: Expression<Date?> {
-        return DateFunctions.time(dateFormatter.string(from: self))
+        return DateFunctions.time(DateFunctions.dateFormatter.string(from: self))
     }
 
     public var datetime: Expression<Date?> {
-        return DateFunctions.datetime(dateFormatter.string(from: self))
+        return DateFunctions.datetime(DateFunctions.dateFormatter.string(from: self))
     }
 
     public var julianday: Expression<Date?> {
-        return DateFunctions.julianday(dateFormatter.string(from: self))
+        return DateFunctions.julianday(DateFunctions.dateFormatter.string(from: self))
     }
 }
 
@@ -103,4 +103,108 @@ extension Expression where UnderlyingType == Date {
     public var julianday: Expression<Date> {
         return Expression<Date>("julianday(\(template))", bindings)
     }
+}
+
+extension DateFunctions {
+
+    /// A global date formatter used to serialize and deserialize `NSDate` objects.
+    /// If multiple date formats are used in an application’s database(s), use a
+    /// custom `Value` type per additional format.
+    public static var dateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss.SSS" // "yyyy-MM-dd HH:mm:ssXXXXX"
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0) /* nil for system setting*/
+        return formatter
+    }()
+
+    /// A global list of date formatter used to deserialize `NSDate`/`Date` objects
+    /// should the default `dateFormatter` fail to match.
+    /// Decoding stops at the first successful date formatter.
+    ///
+    public static var dateFormatters: [DateFormatter] = {
+
+        var formatters = [DateFormatter]()
+
+        do {
+            let formatter1 = DateFormatter()
+            formatter1.dateFormat = "yyyy-MM-dd HH:mm:ssXXXXX"
+            formatter1.locale = Locale(identifier: "en_US_POSIX")
+            formatter1.timeZone = TimeZone(secondsFromGMT: 0)
+            formatters.append(formatter1)
+        }
+
+        do {
+            let formatter1 = DateFormatter()
+            formatter1.dateFormat = "yyyy-MM-dd'T'HH:mm:ss.SSS"
+            formatter1.locale = Locale(identifier: "en_US_POSIX")
+            formatter1.timeZone = TimeZone(secondsFromGMT: 0)
+            formatters.append(formatter1)
+        }
+
+        do {
+            let formatter1 = DateFormatter()
+            formatter1.dateFormat = "yyyy-MM-dd HH:ss"
+            formatter1.locale = Locale(identifier: "en_US_POSIX")
+            formatter1.timeZone = TimeZone(secondsFromGMT: 0)
+            formatters.append(formatter1)
+        }
+
+        // secondary decoding attempts
+        do {
+            let formatter1 = DateFormatter()
+            formatter1.dateFormat = "yyyy-MM-dd HH:mm:ss"
+            formatter1.locale = Locale(identifier: "en_US_POSIX")
+            formatter1.timeZone = TimeZone(secondsFromGMT: 0)
+            formatters.append(formatter1)
+        }
+
+        do {
+            let formatter1 = DateFormatter()
+            formatter1.dateFormat = "yyyy-MM-dd HH:mm:ss.SSSXXXXX"
+            formatter1.locale = Locale(identifier: "en_US_POSIX")
+            formatter1.timeZone = TimeZone(secondsFromGMT: 0)
+            formatters.append(formatter1)
+        }
+
+        do {
+            let formatter1 = DateFormatter()
+            formatter1.dateFormat = "yyyy-MM-dd'T'HH:mm:ssXXXXX"
+            formatter1.locale = Locale(identifier: "en_US_POSIX")
+            formatter1.timeZone = TimeZone(secondsFromGMT: 0)
+            formatters.append(formatter1)
+        }
+
+
+        do {
+            let formatter1 = DateFormatter()
+            formatter1.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
+            formatter1.locale = Locale(identifier: "en_US_POSIX")
+            formatter1.timeZone = TimeZone(secondsFromGMT: 0)
+            formatters.append(formatter1)
+        }
+
+        do {
+            let formatter1 = DateFormatter()
+            formatter1.dateFormat = "yyyy-MM-dd'T'HH:mm:ss.SSSXXXXX"
+            formatter1.locale = Locale(identifier: "en_US_POSIX")
+            formatter1.timeZone = TimeZone(secondsFromGMT: 0)
+            formatters.append(formatter1)
+        }
+
+        class unixDateformatter: DateFormatter {
+            override func string(from date: Date) -> String {
+                let double = date.timeIntervalSince1970
+                return "\(double)"
+            }
+            override func date(from string: String) -> Date? {
+                let seconds = Double(string)
+                return seconds == nil ? nil : Date.init(timeIntervalSince1970: seconds!)
+            }
+        }
+
+        formatters.append(unixDateformatter())
+
+        return formatters
+    }()
 }

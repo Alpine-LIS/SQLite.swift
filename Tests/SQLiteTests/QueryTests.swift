@@ -415,6 +415,9 @@ class QueryTests : XCTestCase {
         AssertSQL("SELECT \"intOptional\" FROM \"table\"", table.select(intOptional) as ScalarQuery<Int?>)
         AssertSQL("SELECT DISTINCT \"int\" FROM \"table\"", table.select(distinct: int) as ScalarQuery<Int>)
         AssertSQL("SELECT DISTINCT \"intOptional\" FROM \"table\"", table.select(distinct: intOptional) as ScalarQuery<Int?>)
+        AssertSQL("SELECT \"int64\" FROM \"table\"", table.select(int64) as ScalarQuery<Int64>)
+        AssertSQL("SELECT \"ROWID\" FROM \"table\"", table.select(rowid) as ScalarQuery<Int64>)
+        AssertSQL("SELECT min(\"ROWID\") FROM \"table\"", table.select(rowid.min))
     }
 
     func test_subscript_withExpression_returnsNamespacedExpression() {

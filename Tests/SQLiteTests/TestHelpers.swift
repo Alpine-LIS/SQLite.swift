@@ -166,3 +166,56 @@ struct TestCodableDate: Codable {
     let date: Date
     let dateOptional: Date?
 }
+
+struct TestCodableRowid: Codable {
+
+    enum CodingKeys: String, CodingKey {
+        case ROWID = "rowid"
+        case int
+        case intOptional
+        case string
+        case stringOptional = "string_optional"
+        case bool
+        case boolOptional
+        case float
+        case floatOptional
+        case double
+        case doubleOptional
+        case date
+        case dateOptional
+    }
+
+    let ROWID: Int?
+    let int: Int
+    let intOptional: Int?
+    let string: String
+    let stringOptional: String?
+    let bool: Bool
+    let boolOptional: Bool?
+    let float: Float
+    let floatOptional: Float?
+    let double: Double
+    let doubleOptional: Double?
+    let date: Date
+    let dateOptional: Date?
+}
+
+func buildCodableTable(_ db: Connection) throws -> Table {
+    let table = Table("codable")
+    let buildQuery = table.create(ifNotExists: true) { builder in
+        builder.column(Expression<Int>("int"))
+        builder.column(Expression<Int?>("intOptional"))
+        builder.column(Expression<String>("string"))
+        builder.column(Expression<String?>("string_optional"))
+        builder.column(Expression<Bool>("bool"))
+        builder.column(Expression<Bool?>("boolOptional"))
+        builder.column(Expression<Double>("float"))
+        builder.column(Expression<Double?>("floatOptional"))
+        builder.column(Expression<Double>("double"))
+        builder.column(Expression<Double?>("doubleOptional"))
+        builder.column(Expression<Date>("date"))
+        builder.column(Expression<Date?>("dateOptional"))
+    }
+    try db.run(buildQuery)
+    return table
+}

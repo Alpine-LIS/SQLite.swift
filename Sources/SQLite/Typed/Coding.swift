@@ -255,16 +255,16 @@ fileprivate class SQLiteDecoder : Decoder {
             return try self.row.get(Expression(key.stringValue))
         }
 
-        func decodeIfPresent(_ type: Bool.Type, forKey key: Key) throws -> Bool? {
-            return try self.row.get(Expression(key.stringValue))
+        func decodeIfPresent(_ type: Bool.Type, forKey key: Key) -> Bool? {
+            return try? self.row.get(Expression(key.stringValue))
         }
 
         func decode(_ type: Int.Type, forKey key: Key) throws -> Int {
             return try self.row.get(Expression(key.stringValue))
         }
 
-        func decodeIfPresent(_ type: Int.Type, forKey key: Key) throws -> Int? {
-            return try self.row.get(Expression(key.stringValue))
+        func decodeIfPresent(_ type: Int.Type, forKey key: Key) -> Int? {
+            return try? self.row.get(Expression(key.stringValue))
         }
 
         func decode(_ type: Int8.Type, forKey key: Key) throws -> Int8 {
@@ -307,8 +307,8 @@ fileprivate class SQLiteDecoder : Decoder {
             return Float(try self.row.get(Expression<Double>(key.stringValue)))
         }
 
-        func decodeIfPresent(_ type: Float.Type, forKey key: Key) throws -> Float? {
-            let double = try self.row.get(Expression<Double?>(key.stringValue))
+        func decodeIfPresent(_ type: Float.Type, forKey key: Key) -> Float? {
+            let double = try? self.row.get(Expression<Double?>(key.stringValue))
             return double == nil ? nil : Float(double!)
         }
 
@@ -316,16 +316,16 @@ fileprivate class SQLiteDecoder : Decoder {
             return try self.row.get(Expression(key.stringValue))
         }
 
-        func decodeIfPresent(_ type: Double.Type, forKey key: MyKey) throws -> Double? {
-            return try self.row.get(Expression(key.stringValue))
+        func decodeIfPresent(_ type: Double.Type, forKey key: MyKey) -> Double? {
+            return try? self.row.get(Expression(key.stringValue))
         }
 
         func decode(_ type: String.Type, forKey key: Key) throws -> String {
             return try self.row.get(Expression(key.stringValue))
         }
 
-        func decodeIfPresent(_ type: String.Type, forKey key: Key) throws -> String? {
-            return try self.row.get(Expression(key.stringValue))
+        func decodeIfPresent(_ type: String.Type, forKey key: Key) -> String? {
+            return try? self.row.get(Expression(key.stringValue))
         }
 
         // MARK: Data Date & JSON
@@ -358,24 +358,25 @@ fileprivate class SQLiteDecoder : Decoder {
 
         func decodeIfPresent<T>(_ type: T.Type, forKey key: MyKey) throws -> T? where T : Decodable {
             if type == Data.self {
-                let data = try self.row.get(Expression<Data?>(key.stringValue))
+                let data = try? self.row.get(Expression<Data?>(key.stringValue))
                 return data as? T
             }
             else if type == Date.self {
                 if let formatters = userInfo[kCodingUserInfoKey_dateFormatters] as? [DateFormatter],
-                   let dateString = try self.row.get(Expression<String?>(key.stringValue)) {
+                   let dateString = try? self.row.get(Expression<String?>(key.stringValue)) {
                     for dateFormater in formatters {
                         if let date = dateFormater.date(from: dateString) {
                             return date as? T
                         }
                     }
                 }
-                let date = try self.row.get(Expression<Date?>(key.stringValue))
+                let date = try? self.row.get(Expression<Date?>(key.stringValue))
                 return date as? T
             }
 
-            guard let JSONString = try self.row.get(Expression<String?>(key.stringValue)) else {
-                throw DecodingError.typeMismatch(type, DecodingError.Context(codingPath: self.codingPath, debugDescription: "an unsupported type was found"))
+            guard let JSONString = try? self.row.get(Expression<String?>(key.stringValue)) else {
+                return nil
+                //throw DecodingError.typeMismatch(type, DecodingError.Context(codingPath: self.codingPath, debugDescription: "an unsupported type was found"))
             }
             guard let data = JSONString.data(using: .utf8) else {
                 throw DecodingError.dataCorrupted(DecodingError.Context(codingPath: self.codingPath, debugDescription: "invalid utf8 data found"))
@@ -443,6 +444,7 @@ fileprivate extension SQLiteDecoder {
             false
         }
 
+        // This passes `row?.decode()` to KeyedDecodingContainer.
         func decode<T>(_ type: T.Type) throws -> T where T : Decodable {
             let value:T = try row.decode(userInfo: userInfo)
             return value

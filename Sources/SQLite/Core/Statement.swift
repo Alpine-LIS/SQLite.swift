@@ -35,7 +35,7 @@ import SQLite3
 /// A single SQL statement.
 public final class Statement {
 
-    fileprivate var handle: OpaquePointer? = nil
+    public private(set) var handle: OpaquePointer? = nil
 
     internal let connection: Connection
 

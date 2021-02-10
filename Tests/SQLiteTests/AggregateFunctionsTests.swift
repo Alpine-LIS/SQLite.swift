@@ -38,6 +38,7 @@ class AggregateFunctionsTests : XCTestCase {
         AssertSQL("min(\"stringOptional\")", stringOptional.min)
         AssertSQL("min(\"date\")", date.min)
         AssertSQL("min(\"dateOptional\")", dateOptional.min)
+        AssertSQL("min(\"ROWID\")", rowid.min)
     }
 
     func test_average_wrapsNumericExpressionsWithAvgFunction() {

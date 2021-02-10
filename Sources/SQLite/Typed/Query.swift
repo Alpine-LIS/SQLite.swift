@@ -935,6 +935,20 @@ extension Connection {
         return RowIterator(statement: statement, columnNames: try columnNamesForQuery(query))
     }
 
+    /// Currently (DLindsey Feb 9 '21) the only prepare call that correctly handles a query string.
+    public func prepareRowIterator(_ queryString: String) throws -> RowIterator {
+        let statement = try prepare(queryString)
+        var columnNames = [String:Int]()
+        for (ii,name) in statement.columnNames.enumerated() {
+            #if USE_UPPERCASE
+            columnNames[name.uppercased().quote()] = Int(ii)
+            #else
+            columnNames[name.quote()] = Int(ii)
+            #endif
+        }
+        return RowIterator(statement: statement, columnNames: columnNames)
+    }
+
     private func columnNamesForQuery(_ query: QueryType) throws -> [String: Int] {
         var (columnNames, idx) = ([String: Int](), 0)
 
@@ -1078,8 +1092,8 @@ public struct Row {
 
     fileprivate let values: [Binding?]
 
-    internal init(_ columnNames: [String: Int], _ values: [Binding?], uppercased: Bool = false) {
-        if uppercased {
+    public init(_ columnNames: [String: Int], _ values: [Binding?], uppercased alreadyUppercased: Bool = false) {
+        if alreadyUppercased {
             self.columnNames = columnNames
         } else {
             var columnNames1 = Dictionary<String,Int>.init(minimumCapacity: columnNames.count)  // columnNames.map({ })

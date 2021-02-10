@@ -88,6 +88,8 @@ public final class Connection {
 
     fileprivate var _handle: OpaquePointer? = nil
 
+    public private(set) var location: Location
+
     /// Initializes a new SQLite connection.
     ///
     /// - Parameters:
@@ -103,9 +105,11 @@ public final class Connection {
     ///
     /// - Returns: A new database connection.
     public init(_ location: Location = .inMemory, readonly: Bool = false) throws {
+        self.location = location
         let flags = readonly ? SQLITE_OPEN_READONLY : SQLITE_OPEN_CREATE | SQLITE_OPEN_READWRITE
         try check(sqlite3_open_v2(location.description, &_handle, flags | SQLITE_OPEN_FULLMUTEX, nil))
         queue.setSpecific(key: Connection.queueKey, value: queueContext)
+        NSLog("Open sqlite3: \(location.description)")
     }
 
     /// Initializes a new connection to a database.
@@ -127,6 +131,7 @@ public final class Connection {
     }
 
     deinit {
+        NSLog("DEINIT close sqlite3: \"\(location.description)\"")
         sqlite3_close(handle)
     }
 
