@@ -131,7 +131,7 @@ public final class Connection {
     }
 
     deinit {
-        NSLog("DEINIT close sqlite3: \"\(location.description)\"")
+        NSLog("DEINIT: close sqlite3: \"\(location.description)\"")
         sqlite3_close(handle)
     }
 
