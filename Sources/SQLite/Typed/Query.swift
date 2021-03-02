@@ -949,7 +949,7 @@ extension Connection {
         return RowIterator(statement: statement, columnNames: columnNames)
     }
 
-    private func columnNamesForQuery(_ query: QueryType) throws -> [String: Int] {
+    public func columnNamesForQuery(_ query: QueryType) throws -> [String: Int] {
         var (columnNames, idx) = ([String: Int](), 0)
 
         for_column:

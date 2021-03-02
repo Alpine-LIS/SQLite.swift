@@ -185,7 +185,7 @@ struct TestCodableRowid: Codable {
         case dateOptional
     }
 
-    let ROWID: Int?
+    let ROWID: Int64?
     let int: Int
     let intOptional: Int?
     let string: String

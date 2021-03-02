@@ -122,6 +122,10 @@ fileprivate class SQLiteEncoder: Encoder {
             self.encoder.setters.append(Expression(key.stringValue) <- value)
         }
 
+        func encode(_ value: Int64, forKey key: Key) throws {
+            self.encoder.setters.append(Expression(key.stringValue) <- value)
+        }
+
         func encode(_ value: Bool, forKey key: Key) throws {
             self.encoder.setters.append(Expression(key.stringValue) <- value)
         }
@@ -172,9 +176,9 @@ fileprivate class SQLiteEncoder: Encoder {
             throw EncodingError.invalidValue(value, EncodingError.Context(codingPath: self.codingPath, debugDescription: "encoding an Int32 is not supported"))
         }
 
-        func encode(_ value: Int64, forKey key: Key) throws {
-            throw EncodingError.invalidValue(value, EncodingError.Context(codingPath: self.codingPath, debugDescription: "encoding an Int64 is not supported"))
-        }
+//        func encode(_ value: Int64, forKey key: Key) throws {
+//            throw EncodingError.invalidValue(value, EncodingError.Context(codingPath: self.codingPath, debugDescription: "encoding an Int64 is not supported"))
+//        }
 
         func encode(_ value: UInt, forKey key: Key) throws {
             throw EncodingError.invalidValue(value, EncodingError.Context(codingPath: self.codingPath, debugDescription: "encoding an UInt is not supported"))
@@ -280,7 +284,12 @@ fileprivate class SQLiteDecoder : Decoder {
         }
 
         func decode(_ type: Int64.Type, forKey key: Key) throws -> Int64 {
-            throw DecodingError.typeMismatch(type, DecodingError.Context(codingPath: self.codingPath, debugDescription: "decoding an UInt64 is not supported"))
+            return try Int64(self.row.get(Expression(key.stringValue)))
+            //throw DecodingError.typeMismatch(type, DecodingError.Context(codingPath: self.codingPath, debugDescription: "decoding an UInt64 is not supported"))
+        }
+
+        func decodeIfPresent(_ type: Int64.Type, forKey key: Key) -> Int64? {
+            return try? self.row.get(Expression(key.stringValue))
         }
 
         func decode(_ type: UInt.Type, forKey key: Key) throws -> UInt {
