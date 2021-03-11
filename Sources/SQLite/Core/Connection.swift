@@ -86,6 +86,10 @@ public final class Connection {
 
     public var handle: OpaquePointer { return _handle! }
 
+    /// The completion `closed` is called with connect is released.
+    /// Must have {[weak self] in /*code*/} captures else memory leak.
+    public var closed: (()->Void)?
+
     fileprivate var _handle: OpaquePointer? = nil
 
     public private(set) var location: Location
@@ -133,6 +137,7 @@ public final class Connection {
     deinit {
         NSLog("DEINIT: close sqlite3: \"\(location.description)\"")
         sqlite3_close(handle)
+        closed?()
     }
 
     // MARK: -
