@@ -163,7 +163,7 @@ public final class Statement {
 
         reset(clearBindings: false)
         _ = try step()
-        return row[0]
+        return row[0] as Binding?
     }
 
     /// - Parameter bindings: A list of parameters to bind to the statement.
@@ -247,6 +247,29 @@ public struct Cursor {
         columnCount = statement.columnCount
     }
 
+    // The `isNull` func was created since Swift has this inability to compile
+    // subscripts that return optional concrete types.
+    // Row entries that can have NULL values, needs to first call this function
+    // before attempting to access a subscripted value.
+    public func isNull(_ index: Int) -> Bool {
+        switch sqlite3_column_type(handle, Int32(index)) {
+        case SQLITE_BLOB:
+            let blob = sqlite3_column_blob(handle, Int32(index))
+            return blob == nil
+        case SQLITE_FLOAT:
+            return false
+        case SQLITE_INTEGER:
+            return false
+        case SQLITE_NULL:
+            return true
+        case SQLITE_TEXT:
+            let text = sqlite3_column_text(handle, Int32(index))
+            return text == nil
+        case let type:
+            fatalError("unsupported column type: \(type)")
+        }
+    }
+
     public subscript(idx: Int) -> Double {
         return sqlite3_column_double(handle, Int32(idx))
     }
@@ -279,7 +302,6 @@ public struct Cursor {
     public subscript(idx: Int) -> Int {
         return Int.fromDatatypeValue(self[idx])
     }
-
 }
 
 /// Cursors provide direct access to a statement’s current row.
@@ -308,8 +330,9 @@ extension Cursor : Sequence {
             if idx >= self.columnCount {
                 return Optional<Binding?>.none
             } else {
+                let v: Binding? = self[idx]
                 idx += 1
-                return self[idx - 1]
+                return v //self[idx - 1]
             }
         }
     }

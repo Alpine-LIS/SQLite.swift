@@ -340,7 +340,17 @@ fileprivate class SQLiteDecoder : Decoder {
         // MARK: Data Date & JSON
         func decode<T>(_ type: T.Type, forKey key: Key) throws -> T where T: Swift.Decodable {
             if type == Data.self {
-                let data = try self.row.get(Expression<Data>(key.stringValue))
+                let column = Expression<Data>(key.stringValue)
+                var data = try? self.row.get(column)
+
+                // The blob might be TEXT.
+                if data == nil {
+                    let text = try self.row.get(Expression<String?>(key.stringValue))
+                    data = text?.data(using: .nonLossyASCII) // nonLossyASCII is 0x00-0xFF ascii, the .ascii encoding is 0x00-0x7F.
+                }
+                if data == nil {
+                    throw QueryError.unexpectedNullValue(name: column.template)
+                }
                 return data as! T
             }
             else if type == Date.self {
@@ -367,7 +377,14 @@ fileprivate class SQLiteDecoder : Decoder {
 
         func decodeIfPresent<T>(_ type: T.Type, forKey key: MyKey) throws -> T? where T : Decodable {
             if type == Data.self {
-                let data = try? self.row.get(Expression<Data?>(key.stringValue))
+                var data = try? self.row.get(Expression<Data?>(key.stringValue))
+
+                // The blob might be TEXT.
+                if data == nil {
+                    let text = try? self.row.get(Expression<String?>(key.stringValue))
+                    data = text?.data(using: .nonLossyASCII) // nonLossyASCII is 0x00-0xFF ascii, the .ascii encoding is 0x00-0x7F.
+                }
+
                 return data as? T
             }
             else if type == Date.self {
