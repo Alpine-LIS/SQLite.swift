@@ -87,6 +87,22 @@ extension SchemaType {
         return select(false, all)
     }
 
+//    /// Builds a copy of the query with the `SELECT ROWID,` clause applied.
+//    ///
+//    ///     let users = Table("users")
+//    ///     let id = Expression<Int64>("id")
+//    ///     let email = Expression<String>("email")
+//    ///
+//    ///     users.select(rowid: [id, email])
+//    ///     // SELECT ROWID,"id", "email" FROM "users"
+//    ///
+//    /// - Parameter all: A list of expressions to select.
+//    ///
+//    /// - Returns: A query with the given `SELECT` clause applied.
+//    public func select(rowid all: [Expressible]) -> Self {
+//        return select(false, [rowid] + all)
+//    }
+
     /// Builds a copy of the query with the `SELECT DISTINCT` clause applied.
     ///
     ///     let users = Table("users")
@@ -114,6 +130,20 @@ extension SchemaType {
     /// - Returns: A query with the given `SELECT *` clause applied.
     public func select(_ star: Star) -> Self {
         return select([star(nil, nil)])
+    }
+
+    /// Builds a copy of the query with the `SELECT ROWID,*` clause applied.
+    ///
+    ///     let users = Table("users")
+    ///
+    ///     users.select(rowid: *)
+    ///     // SELECT ROWID,* FROM "users"
+    ///
+    /// - Parameter star: A star literal.
+    ///
+    /// - Returns: A query with the given `SELECT ROWID,*` clause applied.
+    public func select(rowid star: Star) -> Self {
+        return select([rowid,star(nil, nil)])
     }
 
     /// Builds a copy of the query with the `SELECT DISTINCT *` clause applied.

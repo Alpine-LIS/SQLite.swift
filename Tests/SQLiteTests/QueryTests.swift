@@ -398,6 +398,10 @@ class QueryTests : XCTestCase {
             "SELECT EXISTS (SELECT * FROM \"users\")",
             users.exists
         )
+        AssertSQL(
+            "SELECT EXISTS (SELECT * FROM \"users\" WHERE (\"age\" > 18))",
+            users.where(age > 18).exists
+        )
     }
 
     func test_count_returnsCountExpression() {
@@ -418,6 +422,8 @@ class QueryTests : XCTestCase {
         AssertSQL("SELECT \"int64\" FROM \"table\"", table.select(int64) as ScalarQuery<Int64>)
         AssertSQL("SELECT \"ROWID\" FROM \"table\"", table.select(rowid) as ScalarQuery<Int64>)
         AssertSQL("SELECT min(\"ROWID\") FROM \"table\"", table.select(rowid.min))
+        AssertSQL("SELECT \"ROWID\", * FROM \"table\"", table.select(rowid: *))
+        AssertSQL("SELECT \"ROWID\", \"int64\" FROM \"table\"", table.select([rowid,int64]))
     }
 
     func test_subscript_withExpression_returnsNamespacedExpression() {
@@ -488,6 +494,27 @@ class QueryIntegrationTests : SQLiteTestCase {
         let emails = try! db.prepareRowIterator(users).map { $0[emailColumn] }
 
         XCTAssertEqual(names.map({ "\($0)@example.com" }), emails.sorted())
+    }
+
+    func test_exists() {
+        XCTAssertEqual(0, try! db.scalar(users.count))
+        XCTAssertEqual(false, try! db.scalar(users.exists))
+        XCTAssertEqual(false, try! db.scalar(users.exists))
+        try! InsertUser("alice", age: 48, admin: false)
+        XCTAssertEqual(true, try! db.scalar(users.exists))
+        try! InsertUser("dennis", age: 112, admin: true)
+        XCTAssertEqual(true, try! db.scalar(users.exists))
+        XCTAssertEqual(2, try! db.scalar(users.count))
+
+        let emailColumn = Expression<String>("email")
+        let age = Expression<Int>("age")
+
+        // try sqliteDefault.db.scalar(sqliteDefault.table.where(Expression<String>(CodingKeys.source_id.stringValue) == source_id).exists)
+        XCTAssertEqual(true, try! db.scalar(users.where(emailColumn == "dennis@example.com").exists))
+        XCTAssertEqual(false, try! db.scalar(users.where(emailColumn == "mark@example.com").exists))
+        XCTAssertEqual(false, try! db.scalar(users.where(emailColumn == "").exists))
+        XCTAssertEqual(true, try! db.scalar(users.where(age == 48).exists))
+        XCTAssertEqual(false, try! db.scalar(users.where(age == 0).exists))
     }
 
     func test_ambiguousMap() {
