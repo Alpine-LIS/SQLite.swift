@@ -25,6 +25,7 @@
 import Foundation
 
 public let kCodingUserInfoKey_dateFormatters = CodingUserInfoKey.init(rawValue: "dateFormatters")!
+public let kCodingUserInfoKey_encoding = CodingUserInfoKey.init(rawValue: "encoding")!
 
 extension QueryType {
     /// Creates an `INSERT` statement by encoding the given object
@@ -333,8 +334,16 @@ fileprivate class SQLiteDecoder : Decoder {
             return try self.row.get(Expression(key.stringValue))
         }
 
+        // Supports blobs/Data as text/String.
         func decodeIfPresent(_ type: String.Type, forKey key: Key) -> String? {
-            return try? self.row.get(Expression(key.stringValue))
+            var v: String? = try? self.row.get(Expression(key.stringValue))
+            if v == nil,
+               let data: Data = try? self.row.get(Expression<Data?>(key.stringValue))
+            {
+                // convert blob into text
+                v = String.init(data: data, encoding: (userInfo[kCodingUserInfoKey_encoding] as? String.Encoding) ?? .nonLossyASCII)
+            }
+            return v
         }
 
         // MARK: Data Date & JSON
@@ -346,7 +355,7 @@ fileprivate class SQLiteDecoder : Decoder {
                 // The blob might be TEXT.
                 if data == nil {
                     let text = try self.row.get(Expression<String?>(key.stringValue))
-                    data = text?.data(using: .nonLossyASCII) // nonLossyASCII is 0x00-0xFF ascii, the .ascii encoding is 0x00-0x7F.
+                    data = text?.data(using: (userInfo[kCodingUserInfoKey_encoding] as? String.Encoding) ?? .nonLossyASCII) // nonLossyASCII is 0x00-0xFF ascii, the .ascii encoding is 0x00-0x7F.
                 }
                 if data == nil {
                     throw QueryError.unexpectedNullValue(name: column.template)
@@ -382,7 +391,7 @@ fileprivate class SQLiteDecoder : Decoder {
                 // The blob might be TEXT.
                 if data == nil {
                     let text = try? self.row.get(Expression<String?>(key.stringValue))
-                    data = text?.data(using: .nonLossyASCII) // nonLossyASCII is 0x00-0xFF ascii, the .ascii encoding is 0x00-0x7F.
+                    data = text?.data(using: (userInfo[kCodingUserInfoKey_encoding] as? String.Encoding) ?? .nonLossyASCII) // nonLossyASCII is 0x00-0xFF ascii, the .ascii encoding is 0x00-0x7F.
                 }
 
                 return data as? T
