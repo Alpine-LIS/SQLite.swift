@@ -113,7 +113,6 @@ public final class Connection {
         let flags = readonly ? SQLITE_OPEN_READONLY : SQLITE_OPEN_CREATE | SQLITE_OPEN_READWRITE
         try check(sqlite3_open_v2(location.description, &_handle, flags | SQLITE_OPEN_FULLMUTEX, nil))
         queue.setSpecific(key: Connection.queueKey, value: queueContext)
-        NSLog("Open sqlite3: \(location.description)")
     }
 
     /// Initializes a new connection to a database.
